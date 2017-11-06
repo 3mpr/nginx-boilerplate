@@ -1,21 +1,28 @@
-FROM    nginx:alpine
-RUN     apk add --no-cache openssl
-RUN     echo $'[req] \n\
-distinguished_name = req_distinguished_name \n\
-x509_extensions = v3_req \n\
-prompt = no \n\
-[req_distinguished_name] \n\
-CN = *.localhost \n\
-[v3_req] \n\
-keyUsage = keyEncipherment, dataEncipherment \n\
-extendedKeyUsage = serverAuth \n\
-subjectAltName = @alt_names \n\
-[alt_names] \n\
-DNS.1 = *.localhost \n\
-DNS.2 = localhost' > openssl.cnf
-RUN     mkdir -p /run/secrets/
-RUN     openssl req -new -newkey rsa:2048 -sha1 -days 3650 -nodes -x509 -keyout /run/secrets/cert.key -out /run/secrets/cert.crt -config openssl.cnf
-COPY    . /etc/nginx/
-RUN     ln -sf /dev/stdout /var/log/nginx/bots.access.log
-RUN     rm openssl.cnf
-RUN     apk del openssl
+FROM php:fpm-alpine
+MAINTAINER 3mpr <florian.indot@gmail.com> 
+
+ENV DUMB_INIT_VERSION 1.2.0
+
+RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64 \
+ && chmod +x /usr/local/bin/dumb-init
+
+COPY ["openssl.cnf", "/"]
+
+RUN set -ex \
+ && apk add --update --no-cache openssl nginx rsync \
+ && mkdir -p /run/secrets/ \
+ && openssl req -new -newkey rsa:2048 -sha1 -days 3650 -nodes -x509 -keyout /run/secrets/cert.key -out /run/secrets/cert.crt -config /openssl.cnf \
+ && touch /var/log/nginx/bots.access.log && chown nginx:nginx /var/log/nginx/bots.access.log \
+ && ln -sf /dev/stdout /var/log/nginx/bots.access.log \
+ && rm /openssl.cnf \
+ && apk del openssl
+
+COPY [".", "/etc/nginx/"]
+
+RUN set -ex \
+ && rsync -r /etc/nginx /tmp
+
+COPY ["entrypoint.sh", "/"]
+
+ENTRYPOINT ["/usr/local/bin/dumb-init", "--"]
+CMD ["/entrypoint.sh"]
