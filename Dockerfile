@@ -24,5 +24,8 @@ RUN set -ex \
 
 COPY ["entrypoint.sh", "/"]
 
+VOLUME ["/etc/nginx", "/var/log/nginx", "/var/www"]
+EXPOSE 80 443
+
 ENTRYPOINT ["/usr/local/bin/dumb-init", "--"]
 CMD ["/entrypoint.sh"]
